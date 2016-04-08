@@ -7,7 +7,7 @@ vars = {
 
 deps = {
   "build":
-    "https://chromium.googlesource.com/chromium/tools/build.git",
+    "https://github.com/eunchong/build.git",
 
   "infra/luci":
    ("https://chromium.googlesource.com/external/github.com/luci/luci-py"
