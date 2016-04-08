@@ -6,12 +6,11 @@ import textwrap
 
 import webapp2
 
-from testing_utils import testing
-
+from common import constants
 from common.http_client_appengine import RetryHttpClient
 from handlers import monitor_alerts
 from waterfall import build_failure_analysis_pipelines
-from waterfall import waterfall_config
+from waterfall.test import wf_testcase
 
 
 class _MockedHttpClient(RetryHttpClient):
@@ -30,18 +29,13 @@ class _MockedHttpClient(RetryHttpClient):
     pass
 
 
-class MonitorAlertsTest(testing.AppengineTestCase):
+class MonitorAlertsTest(wf_testcase.WaterfallTestCase):
   app_module = webapp2.WSGIApplication([
       ('/monitor-alerts', monitor_alerts.MonitorAlerts),
   ], debug=True)
 
   def setUp(self):
     super(MonitorAlertsTest, self).setUp()
-
-    def MockMasterIsSupported(master_name):
-      return master_name != 'm0'
-
-    self.mock(waterfall_config, 'MasterIsSupported', MockMasterIsSupported)
 
   def testGetLatestBuildFailuresWhenFailedToPullAlerts(self):
     http_client = _MockedHttpClient(404, 'Not Found')
@@ -168,7 +162,7 @@ class MonitorAlertsTest(testing.AppengineTestCase):
 
     expected_scheduled_analyses = [
         ('m3', 'b3', 3, ['s3'], False,
-         monitor_alerts._BUILD_FAILURE_ANALYSIS_TASKQUEUE),
+         constants.WATERFALL_ANALYSIS_QUEUE),
     ]
 
     scheduled_analyses = []

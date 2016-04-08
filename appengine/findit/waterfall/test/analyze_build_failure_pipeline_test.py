@@ -4,19 +4,18 @@
 
 import os
 
-from testing_utils import testing
-
+from common import constants
 from common import chromium_deps
+from model import analysis_status
 from model.wf_analysis import WfAnalysis
-from model import wf_analysis_status
 from pipeline_wrapper import pipeline_handlers
 from waterfall import buildbot
-from waterfall.analyze_build_failure_pipeline import AnalyzeBuildFailurePipeline
 from waterfall import lock_util
-from waterfall import waterfall_config
+from waterfall.analyze_build_failure_pipeline import AnalyzeBuildFailurePipeline
+from waterfall.test import wf_testcase
 
 
-class AnalyzeBuildFailurePipelineTest(testing.AppengineTestCase):
+class AnalyzeBuildFailurePipelineTest(wf_testcase.WaterfallTestCase):
   app_module = pipeline_handlers._APP
 
   def _MockChangeLog(
@@ -64,7 +63,7 @@ class AnalyzeBuildFailurePipelineTest(testing.AppengineTestCase):
 
   def _Setup(self, master_name, builder_name, build_number):
     analysis = WfAnalysis.Create(master_name, builder_name, build_number)
-    analysis.status = wf_analysis_status.ANALYZING
+    analysis.status = analysis_status.RUNNING
     analysis.put()
 
     def MockWaitUntilDownloadAllowed(*_):
@@ -104,18 +103,11 @@ class AnalyzeBuildFailurePipelineTest(testing.AppengineTestCase):
 
     self._Setup(master_name, builder_name, build_number)
 
-    def MockStepIsSupportedForMaster(*_):
-      return True
-
-    self.mock(waterfall_config,
-              'StepIsSupportedForMaster',
-              MockStepIsSupportedForMaster)
-
     root_pipeline = AnalyzeBuildFailurePipeline(master_name,
                                                 builder_name,
                                                 build_number,
                                                 False)
-    root_pipeline.start(queue_name='default')
+    root_pipeline.start(queue_name=constants.DEFAULT_QUEUE)
     self.execute_queued_tasks()
 
     expected_analysis_result = {
@@ -145,7 +137,7 @@ class AnalyzeBuildFailurePipelineTest(testing.AppengineTestCase):
 
     analysis = WfAnalysis.Get(master_name, builder_name, build_number)
     self.assertIsNotNone(analysis)
-    self.assertEqual(wf_analysis_status.ANALYZED, analysis.status)
+    self.assertEqual(analysis_status.COMPLETED, analysis.status)
     self.assertEqual(expected_analysis_result, analysis.result)
     self.assertIsNotNone(analysis.result_status)
 
@@ -163,7 +155,7 @@ class AnalyzeBuildFailurePipelineTest(testing.AppengineTestCase):
     root_pipeline._ResetAnalysis(master_name, builder_name, build_number)
     analysis = WfAnalysis.Get(master_name, builder_name, build_number)
     self.assertIsNotNone(analysis)
-    self.assertEqual(wf_analysis_status.ANALYZING, analysis.status)
+    self.assertEqual(analysis_status.RUNNING, analysis.status)
     self.assertIsNone(analysis.result_status)
 
   def testAnalyzeBuildFailurePipelineAbortedWithAnalysis(self):
@@ -181,7 +173,7 @@ class AnalyzeBuildFailurePipelineTest(testing.AppengineTestCase):
 
     analysis = WfAnalysis.Get(master_name, builder_name, build_number)
     self.assertIsNotNone(analysis)
-    self.assertEqual(wf_analysis_status.ERROR, analysis.status)
+    self.assertEqual(analysis_status.ERROR, analysis.status)
     self.assertIsNone(analysis.result_status)
 
   def testAnalyzeBuildFailurePipelineAbortedWithoutAnalysis(self):
@@ -213,4 +205,4 @@ class AnalyzeBuildFailurePipelineTest(testing.AppengineTestCase):
 
     analysis = WfAnalysis.Get(master_name, builder_name, build_number)
     self.assertIsNotNone(analysis)
-    self.assertNotEqual(wf_analysis_status.ERROR, analysis.status)
+    self.assertNotEqual(analysis_status.ERROR, analysis.status)

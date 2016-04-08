@@ -6,19 +6,18 @@ import os
 import re
 
 from google.appengine.ext import testbed
+
 import webapp2
 import webtest
-
-from testing_utils import testing
 
 from handlers import build_failure
 from handlers import handlers_util
 from handlers import result_status
 from model.wf_analysis import WfAnalysis
-from model import wf_analysis_status
+from model import analysis_status
+from model.wf_analysis import WfAnalysis
 from waterfall import buildbot
-from waterfall import waterfall_config
-
+from waterfall.test import wf_testcase
 
 # Root directory appengine/findit.
 ROOT_DIR = os.path.join(os.path.dirname(__file__),
@@ -33,7 +32,7 @@ SAMPLE_TRY_JOB_INFO = {
                     'try_job_key': 'm/b/119',
                     'task_id': 'task1',
                     'task_url': 'url/task1',
-                    'status': wf_analysis_status.ANALYZED,
+                    'status': analysis_status.COMPLETED,
                     'try_job_url': (
                         'http://build.chromium.org/p/tryserver.chromium.'
                         'linux/builders/linux_variable/builds/121'),
@@ -46,7 +45,7 @@ SAMPLE_TRY_JOB_INFO = {
                     'try_job_key': 'm/b/119',
                     'task_id': 'task1',
                     'task_url': 'url/task1',
-                    'status': wf_analysis_status.ANALYZED,
+                    'status': analysis_status.COMPLETED,
                     'try_job_url': (
                         'http://build.chromium.org/p/tryserver.chromium.'
                         'linux/builders/linux_variable/builds/121'),
@@ -70,7 +69,7 @@ SAMPLE_TRY_JOB_INFO = {
                     'ref_name': 'step1',
                     'try_job_key': 'm/b/120',
                     'status': result_status.NO_TRY_JOB_REASON_MAP[
-                        wf_analysis_status.PENDING],
+                        analysis_status.PENDING],
                     'task_id': 'task2',
                     'task_url': 'url/task2',
                     'tests': ['test1']
@@ -83,7 +82,7 @@ SAMPLE_TRY_JOB_INFO = {
             'try_jobs': [
                 {
                     'try_job_key': 'm/b/120',
-                    'status': wf_analysis_status.ANALYZED,
+                    'status': analysis_status.COMPLETED,
                     'try_job_build_number': 120,
                     'try_job_url': (
                         'http://build.chromium.org/p/tryserver.chromium.'
@@ -100,7 +99,7 @@ SAMPLE_TRY_JOB_INFO = {
 }
 
 
-class BuildFailureTest(testing.AppengineTestCase):
+class BuildFailureTest(wf_testcase.WaterfallTestCase):
   app_module = webapp2.WSGIApplication([
       ('/build-failure', build_failure.BuildFailure),
   ], debug=True)
@@ -121,7 +120,7 @@ class BuildFailureTest(testing.AppengineTestCase):
 
   def testGetTriageHistoryWhenUserIsNotAdmin(self):
     analysis = WfAnalysis.Create('m', 'b', 1)
-    analysis.status = wf_analysis_status.ANALYZED
+    analysis.status = analysis_status.COMPLETED
     analysis.triage_history = [
         {
             'triage_timestamp': 1438380761,
@@ -134,7 +133,7 @@ class BuildFailureTest(testing.AppengineTestCase):
 
   def testGetTriageHistoryWhenUserIsAdmin(self):
     analysis = WfAnalysis.Create('m', 'b', 1)
-    analysis.status = wf_analysis_status.ANALYZED
+    analysis.status = analysis_status.COMPLETED
     analysis.triage_history = [
         {
             'triage_timestamp': 1438380761,
@@ -156,19 +155,14 @@ class BuildFailureTest(testing.AppengineTestCase):
         self.test_app.get, '/build-failure', params={'url': build_url})
 
   def testNonAdminCanViewAnalysisOfFailureOnUnsupportedMaster(self):
-    master_name = 'm'
+    master_name = 'm2'
     builder_name = 'b 1'
     build_number = 123
     build_url = buildbot.CreateBuildUrl(
         master_name, builder_name, build_number)
 
-    def MockMasterIsSupported(*_):
-      return False
-    self.mock(waterfall_config, 'MasterIsSupported',
-              MockMasterIsSupported)
-
     analysis = WfAnalysis.Create(master_name, builder_name, build_number)
-    analysis.status = wf_analysis_status.ANALYZED
+    analysis.status = analysis_status.COMPLETED
     analysis.put()
 
     response = self.test_app.get('/build-failure',
@@ -177,15 +171,11 @@ class BuildFailureTest(testing.AppengineTestCase):
     self.assertEqual(0, len(self.taskqueue_stub.get_filtered_tasks()))
 
   def testNonAdminCannotRequestAnalysisOfFailureOnUnsupportedMaster(self):
-    master_name = 'm'
+    master_name = 'm2'
     builder_name = 'b 1'
     build_number = 123
     build_url = buildbot.CreateBuildUrl(
         master_name, builder_name, build_number)
-
-    def MockMasterIsSupported(*_):
-      return False
-    self.mock(waterfall_config, 'MasterIsSupported', MockMasterIsSupported)
 
     self.assertRaisesRegexp(
         webtest.app.AppError,
@@ -195,15 +185,11 @@ class BuildFailureTest(testing.AppengineTestCase):
         self.test_app.get, '/build-failure', params={'url': build_url})
 
   def testAdminCanRequestAnalysisOfFailureOnUnsupportedMaster(self):
-    master_name = 'm'
+    master_name = 'm2'
     builder_name = 'b'
     build_number = 123
     build_url = buildbot.CreateBuildUrl(
         master_name, builder_name, build_number)
-
-    def MockMasterIsSupported(*_):
-      return False
-    self.mock(waterfall_config, 'MasterIsSupported', MockMasterIsSupported)
 
     self.mock_current_user(user_email='test@chromium.org', is_admin=True)
 
@@ -218,10 +204,6 @@ class BuildFailureTest(testing.AppengineTestCase):
     build_number = 123
     build_url = buildbot.CreateBuildUrl(
         master_name, builder_name, build_number)
-
-    def MockMasterIsSupported(*_):
-      return True
-    self.mock(waterfall_config, 'MasterIsSupported', MockMasterIsSupported)
 
     response = self.test_app.get('/build-failure', params={'url': build_url})
     self.assertEquals(200, response.status_int)
@@ -442,7 +424,7 @@ class BuildFailureTest(testing.AppengineTestCase):
                             'try_job_key': 'm/b/119',
                             'task_id': 'task1',
                             'task_url': 'url/task1',
-                            'status': wf_analysis_status.ANALYZED,
+                            'status': analysis_status.COMPLETED,
                             'try_job_url': (
                                 'http://build.chromium.org/p/tryserver.chromium'
                                 '.linux/builders/linux_variable/builds/121'),
@@ -477,7 +459,7 @@ class BuildFailureTest(testing.AppengineTestCase):
                             'try_job_key': 'm/b/119',
                             'task_id': 'task1',
                             'task_url': 'url/task1',
-                            'status': wf_analysis_status.ANALYZED,
+                            'status': analysis_status.COMPLETED,
                             'try_job_url': (
                                 'http://build.chromium.org/p/tryserver.chromium'
                                 '.linux/builders/linux_variable/builds/121'),
@@ -536,7 +518,7 @@ class BuildFailureTest(testing.AppengineTestCase):
                             'ref_name': 'step1',
                             'try_job_key': 'm/b/120',
                             'status': result_status.NO_TRY_JOB_REASON_MAP[
-                                wf_analysis_status.PENDING],
+                                analysis_status.PENDING],
                             'task_id': 'task2',
                             'task_url': 'url/task2',
                             'tests': ['test1']
@@ -598,7 +580,7 @@ class BuildFailureTest(testing.AppengineTestCase):
                     {
                         'try_job': {
                             'try_job_key': 'm/b/120',
-                            'status': wf_analysis_status.ANALYZED,
+                            'status': analysis_status.COMPLETED,
                             'try_job_build_number': 120,
                             'try_job_url': (
                                 'http://build.chromium.org/p/tryserver.chromium'

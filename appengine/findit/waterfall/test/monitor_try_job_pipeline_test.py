@@ -4,15 +4,14 @@
 
 from datetime import datetime
 import json
-from testing_utils import testing
 import time
 
 from common import buildbucket_client
-from model import wf_analysis_status
+from model import analysis_status
 from model.wf_try_job import WfTryJob
 from model.wf_try_job_data import WfTryJobData
-from waterfall import waterfall_config
 from waterfall.monitor_try_job_pipeline import MonitorTryJobPipeline
+from waterfall.test import wf_testcase
 from waterfall.try_job_type import TryJobType
 
 
@@ -24,7 +23,7 @@ REQUEST_COUNTER = {
 }
 
 
-class MonitorTryJobPipelineTest(testing.AppengineTestCase):
+class MonitorTryJobPipelineTest(wf_testcase.WaterfallTestCase):
 
   def _MockGetTryJobs(self, build_id):
     def Mocked_GetTryJobs(*_):
@@ -121,17 +120,8 @@ class MonitorTryJobPipelineTest(testing.AppengineTestCase):
 
     self.mock(buildbucket_client, 'GetTryJobs', Mocked_GetTryJobs)
 
-  def _MockGetTryJobSettings(self):
-    return {
-        'server_query_interval_seconds': 60,
-        'job_timeout_hours': 5,
-        'allowed_response_error_times': 5
-    }
-
   def setUp(self):
     super(MonitorTryJobPipelineTest, self).setUp()
-    self.mock(
-        waterfall_config, 'GetTryJobSettings', self._MockGetTryJobSettings)
     self.mock(time, 'sleep', lambda x: None)
 
   def testMicrosecondsToDatetime(self):
@@ -212,10 +202,9 @@ class MonitorTryJobPipelineTest(testing.AppengineTestCase):
             'try_job_id': '1',
         }
     ]
-    try_job.status = wf_analysis_status.ANALYZING
+    try_job.status = analysis_status.RUNNING
     try_job.put()
     self._MockGetTryJobs(try_job_id)
-    self._MockGetTryJobSettings()
 
     pipeline = MonitorTryJobPipeline()
     compile_result = pipeline.run(
@@ -240,7 +229,7 @@ class MonitorTryJobPipelineTest(testing.AppengineTestCase):
 
     try_job = WfTryJob.Get(master_name, builder_name, build_number)
     self.assertEqual(expected_compile_result, try_job.compile_results[-1])
-    self.assertEqual(wf_analysis_status.ANALYZING, try_job.status)
+    self.assertEqual(analysis_status.RUNNING, try_job.status)
 
     try_job_data = WfTryJobData.Get(try_job_id)
     self.assertEqual(try_job_data.regression_range_size, regression_range_size)
@@ -259,10 +248,9 @@ class MonitorTryJobPipelineTest(testing.AppengineTestCase):
             'try_job_id': '3',
         }
     ]
-    try_job.status = wf_analysis_status.ANALYZING
+    try_job.status = analysis_status.RUNNING
     try_job.put()
     self._MockGetTryJobs(try_job_id)
-    self._MockGetTryJobSettings()
 
     pipeline = MonitorTryJobPipeline()
     test_result = pipeline.run(
@@ -294,7 +282,7 @@ class MonitorTryJobPipelineTest(testing.AppengineTestCase):
 
     try_job = WfTryJob.Get(master_name, builder_name, build_number)
     self.assertEqual(expected_test_result, try_job.test_results[-1])
-    self.assertEqual(wf_analysis_status.ANALYZING, try_job.status)
+    self.assertEqual(analysis_status.RUNNING, try_job.status)
 
   def testUpdateTryJobResultAnalyzing(self):
     master_name = 'm'
@@ -309,4 +297,4 @@ class MonitorTryJobPipelineTest(testing.AppengineTestCase):
         buildbucket_client.BuildbucketBuild.STARTED, master_name, builder_name,
         build_number, TryJobType.TEST, try_job_id, 'url')
     try_job = WfTryJob.Get(master_name, builder_name, build_number)
-    self.assertEqual(wf_analysis_status.ANALYZING, try_job.status)
+    self.assertEqual(analysis_status.RUNNING, try_job.status)

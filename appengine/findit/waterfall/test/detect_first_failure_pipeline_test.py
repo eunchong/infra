@@ -8,10 +8,8 @@ import os
 import urllib
 import zlib
 
-from testing_utils import testing
-
 from common.http_client_appengine import HttpClientAppengine as HttpClient
-from model import wf_analysis_status
+from model import analysis_status
 from model.wf_analysis import WfAnalysis
 from model.wf_build import WfBuild
 from model.wf_step import WfStep
@@ -19,23 +17,11 @@ from pipeline_wrapper import pipeline_handlers
 from waterfall import buildbot
 from waterfall import lock_util
 from waterfall import swarming_util
-from waterfall import waterfall_config
 from waterfall.detect_first_failure_pipeline import DetectFirstFailurePipeline
+from waterfall.test import wf_testcase
 
 
-_MOCK_SWARMING_SETTINGS = {
-    'task_timeout_hours': 23,
-    'server_query_interval_seconds': 60,
-    'iterations_to_rerun': 10,
-    'server_host': 'chromium-swarm.appspot.com',
-    'default_request_priority': 150,
-    'isolated_storage_url': 'isolateserver.storage.googleapis.com',
-    'isolated_server': 'https://isolateserver.appspot.com',
-    'request_expiration_hours': 20
-}
-
-
-class DetectFirstFailureTest(testing.AppengineTestCase):
+class DetectFirstFailureTest(wf_testcase.WaterfallTestCase):
   app_module = pipeline_handlers._APP
 
   def setUp(self):
@@ -48,10 +34,6 @@ class DetectFirstFailureTest(testing.AppengineTestCase):
       return True
 
     self.mock(lock_util, 'WaitUntilDownloadAllowed', _WaitUntilDownloadAllowed)
-
-    def _MockGetSwarmingSettings():
-      return _MOCK_SWARMING_SETTINGS
-    self.mock(waterfall_config, 'GetSwarmingSettings', _MockGetSwarmingSettings)
 
   def _TimeBeforeNowBySeconds(self, seconds):
     return datetime.datetime.utcnow() - datetime.timedelta(0, seconds, 0)
@@ -85,7 +67,7 @@ class DetectFirstFailureTest(testing.AppengineTestCase):
     build_number = 123
 
     self._CreateAndSaveWfAnanlysis(
-        master_name, builder_name, build_number, wf_analysis_status.ANALYZING)
+        master_name, builder_name, build_number, analysis_status.RUNNING)
 
     # Setup build data for builds:
     # 123: mock urlfetch to ensure it is fetched.
@@ -130,7 +112,7 @@ class DetectFirstFailureTest(testing.AppengineTestCase):
     build_number = 100
 
     self._CreateAndSaveWfAnanlysis(
-        master_name, builder_name, build_number, wf_analysis_status.ANALYZING)
+        master_name, builder_name, build_number, analysis_status.RUNNING)
 
     # Setup build data for builds:
     # 100: net_unitests failed, unit_tests failed.
@@ -165,7 +147,7 @@ class DetectFirstFailureTest(testing.AppengineTestCase):
     build_number = 124
 
     self._CreateAndSaveWfAnanlysis(
-        master_name, builder_name, build_number, wf_analysis_status.ANALYZING)
+        master_name, builder_name, build_number, analysis_status.RUNNING)
 
     # Setup build data for builds:
     self._MockUrlfetchWithBuildData(master_name, builder_name, 124)
@@ -193,7 +175,7 @@ class DetectFirstFailureTest(testing.AppengineTestCase):
     build_number = 121
 
     self._CreateAndSaveWfAnanlysis(
-        master_name, builder_name, build_number, wf_analysis_status.ANALYZING)
+        master_name, builder_name, build_number, analysis_status.RUNNING)
 
     # Setup build data for builds:
     self._MockUrlfetchWithBuildData(master_name, builder_name, 121)
@@ -211,7 +193,7 @@ class DetectFirstFailureTest(testing.AppengineTestCase):
     build_number = 2
 
     self._CreateAndSaveWfAnanlysis(
-        master_name, builder_name, build_number, wf_analysis_status.ANALYZING)
+        master_name, builder_name, build_number, analysis_status.RUNNING)
 
     # Setup build data for builds:
     self._MockUrlfetchWithBuildData(master_name, builder_name, 2)
@@ -585,7 +567,7 @@ class DetectFirstFailureTest(testing.AppengineTestCase):
     build_number = 223
 
     self._CreateAndSaveWfAnanlysis(
-        master_name, builder_name, build_number, wf_analysis_status.ANALYZING)
+        master_name, builder_name, build_number, analysis_status.RUNNING)
 
     # Mock data for retrieving data from swarming server for a build.
     self._MockUrlFetchWithSwarmingData(master_name, builder_name, 223)

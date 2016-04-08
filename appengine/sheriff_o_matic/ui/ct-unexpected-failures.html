@@ -33,6 +33,9 @@ found in the LICENSE file.
       }
     </style>
     <ct-tree-status status="{{ treeStatuses['chromium'] }}" state="{{ treeStatuses['chromium'].status }}"></ct-tree-status>
+    <template if="{{ tree == 'trooper' }}">
+      <ct-tree-status status="{{ treeStatuses['infra'] }}" state="{{ treeStatuses['infra'].status }}"></ct-tree-status>
+    </template>
     <template if="{{ tree == 'time-series-alerts' }}">
       <ct-time-series>
       </ct-time-series>
@@ -43,7 +46,7 @@ found in the LICENSE file.
     <ct-failure-stream caption="Reliable failures" category="default" groups="{{ failures && failures.failures[tree] }}" repositories="{{ repositories }}"></ct-failure-stream>
     <ct-failure-stream caption="Failures that have only happened once (on one bot)" category="failedOnce" groups="{{ failures && failures.failures[tree] }}" repositories="{{ repositories }}"></ct-failure-stream>
     <ct-failure-stream caption="Snoozed failures" category="snoozed" groups="{{ failures && failures.failures[tree] }}" repositories="{{ repositories }}"></ct-failure-stream>
-    <template if="{{ !waiting && tree != 'time-series-alerts' && (!failures.failures[tree] || failures.failures[tree].length == 0) }}">
+    <template if="{{ !waiting && tree != 'time-series-alerts' && (!failures.failures[tree] || failures.failures[tree].length == 0) && (!bugQueue.alerts[tree] || bugQueue.alerts[tree].alerts.length == 0) }}">
       <ct-party-time></ct-party-time>
     </template>
   </template>

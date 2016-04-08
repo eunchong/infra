@@ -4,36 +4,17 @@
 
 import time
 
-from testing_utils import testing
-
-from model import wf_analysis_status
+from model import analysis_status
 from model.wf_swarming_task import WfSwarmingTask
 from waterfall import swarming_util
+from waterfall import trigger_swarming_task_pipeline
 from waterfall import waterfall_config
 from waterfall.swarming_task_request import SwarmingTaskRequest
-from waterfall import trigger_swarming_task_pipeline
+from waterfall.test import wf_testcase
 from waterfall.trigger_swarming_task_pipeline import TriggerSwarmingTaskPipeline
 
 
-_MOCK_SWARMING_SETTINGS = {
-    'task_timeout_hours': 23,
-    'server_query_interval_seconds': 60,
-    'iterations_to_rerun': 10,
-    'server_host': 'chromium-swarm.appspot.com',
-    'default_request_priority': 150,
-    'isolated_storage_url': 'isolateserver.storage.googleapis.com',
-    'isolated_server': 'https://isolateserver.appspot.com',
-    'request_expiration_hours': 20
-}
-
-
-class TriggerSwarmingTaskPipelineTest(testing.AppengineTestCase):
-
-  def _MockGetSwarmingSettings(self):
-    def MockedGetSwarmingSettings():
-      return _MOCK_SWARMING_SETTINGS
-    self.mock(waterfall_config, 'GetSwarmingSettings',
-              MockedGetSwarmingSettings)
+class TriggerSwarmingTaskPipelineTest(wf_testcase.WaterfallTestCase):
 
   def testNoNewSwarmingTaskIsNeeded(self):
     master_name = 'm'
@@ -48,7 +29,7 @@ class TriggerSwarmingTaskPipelineTest(testing.AppengineTestCase):
               MockedListSwarmingTasksDataByTags)
     swarming_task = WfSwarmingTask.Create(
         master_name, builder_name, build_number, step_name)
-    swarming_task.status = wf_analysis_status.ANALYZING
+    swarming_task.status = analysis_status.RUNNING
     swarming_task.task_id = 'task_id'
     swarming_task.put()
 
@@ -66,14 +47,14 @@ class TriggerSwarmingTaskPipelineTest(testing.AppengineTestCase):
 
     swarming_task = WfSwarmingTask.Create(
         master_name, builder_name, build_number, step_name)
-    swarming_task.status = wf_analysis_status.PENDING
+    swarming_task.status = analysis_status.PENDING
     swarming_task.put()
 
     def MockedSleep(*_):
       swarming_task = WfSwarmingTask.Get(
           master_name, builder_name, build_number, step_name)
-      self.assertEqual(wf_analysis_status.PENDING, swarming_task.status)
-      swarming_task.status = wf_analysis_status.ANALYZING
+      self.assertEqual(analysis_status.PENDING, swarming_task.status)
+      swarming_task.status = analysis_status.RUNNING
       swarming_task.task_id = 'task_id'
       swarming_task.put()
     self.mock(time, 'sleep', MockedSleep)
@@ -128,8 +109,6 @@ class TriggerSwarmingTaskPipelineTest(testing.AppengineTestCase):
     self.mock(trigger_swarming_task_pipeline, '_GetSwarmingTaskName',
               MockedGetSwarmingTaskName)
 
-    self._MockGetSwarmingSettings()
-
     master_name = 'm'
     builder_name = 'b'
     build_number = 234
@@ -177,6 +156,6 @@ class TriggerSwarmingTaskPipelineTest(testing.AppengineTestCase):
     self.assertIsNotNone(swarming_task)
     self.assertEqual('new_task_id', swarming_task.task_id)
     self.assertEqual(tests, swarming_task.parameters['tests'])
-    self.assertEqual(_MOCK_SWARMING_SETTINGS['iterations_to_rerun'],
-                     swarming_task.parameters['iterations_to_rerun'])
-    self.assertEqual('a_tests', swarming_task.parameters['ref_name'])
+    self.assertEqual(
+        waterfall_config.GetSwarmingSettings()['iterations_to_rerun'],
+        swarming_task.parameters['iterations_to_rerun'])
